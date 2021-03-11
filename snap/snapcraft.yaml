@@ -24,12 +24,13 @@ apps:
     command-chain:
       - snap/command-chain/desktop-launch
       - bin/run-daemon
-      - bin/wayland-launch
-    command: bin/flutter_gallery
+      - env-setup
+    command: bin/x11_kiosk_launch bin/flutter_gallery
     plugs:
       - opengl
       - wayland
       - network
+      - network-bind
 
   flutter-gallery:
     command: bin/flutter_gallery
@@ -53,3 +54,61 @@ parts:
     override-build:  $SNAPCRAFT_PART_BUILD/build-with-plugs.sh opengl wayland network
     stage-packages:
       - inotify-tools
+
+  ppa-setup:
+    plugin: nil
+    override-pull: |
+      sudo apt --assume-yes install software-properties-common
+      sudo add-apt-repository -y ppa:mir-team/release
+      sudo apt install --assume-yes libmiral-dev
+      snapcraftctl pull
+
+  mir-kiosk-x11:
+    after: [ppa-setup]
+    plugin: cmake
+    source: https://github.com/MirServer/mir_kiosk_x11.git
+    override-pull: |
+      snapcraftctl pull
+      server_version=`git rev-list --count HEAD`
+      mir_version=`LANG=C apt-cache policy libmircommon-dev | sed -rne 's/^\s+Candidate:\s+([^-]*)-.+$/\1/p'`
+      snapcraftctl set-version $server_version-mir$mir_version
+    build-packages:
+      - pkg-config
+      - libmiral-dev
+      - make
+      - g++
+    stage-packages:
+      - inotify-tools
+      - libmiral4
+      - try: [mir-platform-graphics-wayland]  # Mir 2.2+
+      - else: [mir-platform-graphics-wayland18] # Mir < 2.2
+      - dmz-cursor-theme
+      - fonts-freefont-ttf
+      - xwayland
+      - libbz2-1.0
+    prime:
+    - -usr/lib/${SNAPCRAFT_ARCH_TRIPLET}/libGL.*
+    - -usr/lib/${SNAPCRAFT_ARCH_TRIPLET}/libGL_*
+    - -usr/lib/${SNAPCRAFT_ARCH_TRIPLET}/libEGL*
+    - -usr/lib/${SNAPCRAFT_ARCH_TRIPLET}/libdrm*
+    - -usr/lib/${SNAPCRAFT_ARCH_TRIPLET}/dri
+    - -usr/share/doc
+
+  env-setup:
+    plugin: dump
+    source: env-setup
+    override-build: |
+      snapcraftctl build
+      sed s/\$\{SNAPCRAFT_ARCH_TRIPLET}/${SNAPCRAFT_ARCH_TRIPLET}/g --in-place $SNAPCRAFT_PART_INSTALL/hacks/*
+
+layout:
+  /usr/share/X11:
+    bind: $SNAP/usr/share/X11
+  /usr/bin/xkbcomp:
+    symlink: $SNAP/usr/bin/xkbcomp
+  /usr/share/icons:
+    bind: $SNAP/usr/share/icons
+  /usr/share/fonts:
+    bind: $SNAP/usr/share/fonts
+  /etc/fonts:
+    bind: $SNAP/etc/fonts
