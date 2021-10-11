@@ -38,7 +38,6 @@ apps:
 parts:
   flutter-gallery-bugra:
     source: https://github.com/flutter/gallery.git
-    source-commit: 9ac956114204d291959d3efe07196cb6c9bb74a7
     plugin: flutter
     override-pull: |
       snapcraftctl pull
